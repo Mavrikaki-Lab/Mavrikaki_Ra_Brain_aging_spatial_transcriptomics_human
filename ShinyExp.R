@@ -130,8 +130,22 @@ From Rai et al., to be submitted", align="center")
           width=9,
           accordion(
             open=c("HD plot", "V2 plot"),
-            accordion_panel("HD plot", plotOutput("HD_plot")), 
-            accordion_panel("V2 plot", plotOutput("V2_plot"))
+            accordion_panel(
+              "HD plot", 
+              accordion(
+                height=325,
+                accordion_panel("HD cluster", div(imageOutput("HDcluster"), style="text-align:center;"))
+              ),
+              plotOutput("HD_plot")
+            ), 
+            accordion_panel(
+              "V2 plot", 
+              accordion(
+                height=275,
+                accordion_panel("V2 cluster", div(imageOutput("V2cluster"), style="text-align:center;"))
+              ),
+              plotOutput("V2_plot")
+            )
           )
         )
       ),
@@ -153,6 +167,12 @@ From Rai et al., to be submitted", align="center")
         ),
         nav_panel("HD", plotOutput("HD_HM")), 
         nav_panel("V2", plotOutput("V2_HM"))
+      ),
+      card(
+        card_header(
+          h5("Acknowledgements", align="center")
+        ),
+        card_image(file=here("Acknowledgements.png"))
       )
     )
   )
@@ -162,6 +182,20 @@ From Rai et al., to be submitted", align="center")
 server <- function(input, output, session){
   updateSelectizeInput(session, "multi_input", choices=unique(HD_proc$gene_name), server=TRUE)
   updateSelectizeInput(session, "gene_input", choice=unique(HD_proc$gene_name), server=TRUE, selected="VAMP1")
+ 
+  age_colors <- c(young = "#D22B2B", middle = "#0000FF", old = "#4F7942")
+  
+  output$HDcluster <- renderImage({
+    list(src=here("HDclusters.png"), width="90%", height="250")
+    },
+    deleteFile=FALSE 
+  )
+  
+  output$V2cluster <- renderImage({
+    list(src=here("V2clusters.png"), width="75%", height="200")
+   },
+   deleteFile=FALSE
+  )
   
   #filtering the original datasets to contain the layer and age specific information on the gene that the user inputted 
   filteredData <- reactive({
@@ -190,78 +224,88 @@ server <- function(input, output, session){
   })
     
     #Outputting the V2 plot based on how the user wants to display their data 
-    output$V2_plot <- renderPlot({
-      V2_Data <- filteredData()$v2
+  output$V2_plot <- renderPlot({
+    V2_Data <- filteredData()$v2
       
-      if("ageGroups" %in% input$x_axis){
-        p <- ggplot(V2_Data, aes(x=age, y=Expression, fill=age, group=age, text=paste("Age:", age))) +
-          facet_wrap(~layer, nrow=1) +
-          labs(title=input$gene_input)+
-          xlab("Age Groups")
-        if("violin" %in% input$plot_layers) {
-          p <- p + geom_violin(trim=FALSE, alpha=0.5)
-        }
-        if("boxPlot" %in% input$plot_layers) {
-          p <- p + geom_boxplot(width=0.15, color="black")
-        }
-        if("jitterPoint" %in% input$plot_layers){
-          p <- p + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
-        }
+    if("ageGroups" %in% input$x_axis){
+      p <- ggplot(V2_Data, aes(x=age, y=Expression, fill=age, group=age, text=paste("Age:", age))) +
+        facet_grid(.~layer) +
+        xlab("Age Groups")
+      if("violin" %in% input$plot_layers) {
+        p <- p + geom_violin(trim=FALSE, alpha=0.5)
       }
-      if("brainLayers" %in% input$x_axis){
-        p <- ggplot(V2_Data, aes(x=layer, y=Expression, fill=age, text=paste("Layer:", layer))) +
-          facet_wrap(~age, nrow=1)+
-          labs(title=input$gene_input)+
-          xlab("Layers") 
-        if("violin" %in% input$plot_layers) {
-          p <- p + geom_violin(trim=FALSE, alpha=0.5)
-        }
-        if("boxPlot" %in% input$plot_layers) {
-          p <- p + geom_boxplot(width=0.15, color="black")
-        }
-        if("jitterPoint" %in% input$plot_layers){
-          p <- p + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
-        }
+      if("boxPlot" %in% input$plot_layers) {
+        p <- p + geom_boxplot(width=0.15, color="black")
       }
-      p + theme_prism() + scale_fill_grafify()
-    })
+      if("jitterPoint" %in% input$plot_layers){
+        p <- p + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
+      }
+    }
+    if("brainLayers" %in% input$x_axis){
+      p <- ggplot(V2_Data, aes(x=layer, y=Expression, fill=age, text=paste("Layer:", layer))) +
+        facet_grid(.~age, labeller=labeller(age=c(young="Young", middle="Middle", old="Old"))) +
+        xlab("Layers")
+      if("violin" %in% input$plot_layers) {
+        p <- p + geom_violin(trim=FALSE, alpha=0.5)
+      }
+      if("boxPlot" %in% input$plot_layers) {
+        p <- p + geom_boxplot(width=0.15, color="black")
+      }
+      if("jitterPoint" %in% input$plot_layers){
+        p <- p + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
+      }
+    }
+    p <- p + labs(title=input$gene_input) +
+      scale_fill_manual(values=age_colors) +
+      theme_minimal()+
+      theme(
+        panel.border=element_rect(color="black", fill=NA, linewidth=0.75),
+        strip.text=element_text(face="bold")
+      )
+    p
+  })
     
     #Outputting the HD plot based on how the user wants to display their data 
-    output$HD_plot <- renderPlot({
-      HD_Data <- filteredData()$hd
-      
-      if("ageGroups" %in% input$x_axis){
-        p2 <- ggplot(HD_Data, aes(x=age, y=Expression, fill=age, text=paste("Age:", age))) +
-          facet_wrap(~layer, nrow=1) +
-          labs(title=input$gene_input)+
-          xlab("Age Groups") 
-        if("violin" %in% input$plot_layers) {
-          p2 <- p2 + geom_violin(trim=FALSE, alpha=0.5)
-        }
-        if("boxPlot" %in% input$plot_layers) {
-          p2 <- p2 + geom_boxplot(width=0.15, color="black")
-        }
-        if("jitterPoint" %in% input$plot_layers){
-          p2 <- p2 + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
-        }
+output$HD_plot <- renderPlot({
+    HD_Data <- filteredData()$hd
+  
+    if("ageGroups" %in% input$x_axis){
+      p2 <- ggplot(HD_Data, aes(x=age, y=Expression, fill=age, text=paste("Age:", age))) +
+        facet_grid(.~layer) +
+        xlab("Age Groups") 
+      if("violin" %in% input$plot_layers) {
+        p2 <- p2 + geom_violin(trim=FALSE, alpha=0.5)
       }
-      if("brainLayers" %in% input$x_axis){
-        p2 <- ggplot(HD_Data, aes(x=layer, y=Expression, fill=age, text=paste("layer:", layer))) +
-          facet_wrap(~age, nrow=1)+
-          labs(title=input$gene_input)+
-          xlab("Layers") 
-        if("violin" %in% input$plot_layers) {
-          p2 <- p2 + geom_violin(trim=FALSE, alpha=0.5)
-        }
-        if("boxPlot" %in% input$plot_layers) {
-          p2 <- p2 + geom_boxplot(width=0.15, color="black")
-        }
-        if("jitterPoint" %in% input$plot_layers){
-          p2 <- p2 + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
-        }
+      if("boxPlot" %in% input$plot_layers) {
+        p2 <- p2 + geom_boxplot(width=0.15, color="black")
       }
-      p2 + theme_prism() + scale_fill_grafify()
-    })
+      if("jitterPoint" %in% input$plot_layers){
+        p2 <- p2 + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
+      }
+    }
+    if("brainLayers" %in% input$x_axis){
+      p2 <- ggplot(HD_Data, aes(x=layer, y=Expression, fill=age, text=paste("layer:", layer))) +
+        facet_grid(.~age, labeller=labeller(age=c(young="Young", middle="Middle", old="Old")))+
+        xlab("Layers") 
+      if("violin" %in% input$plot_layers) {
+        p2 <- p2 + geom_violin(trim=FALSE, alpha=0.5)
+      }
+      if("boxPlot" %in% input$plot_layers) {
+        p2 <- p2 + geom_boxplot(width=0.15, color="black")
+      }
+      if("jitterPoint" %in% input$plot_layers){
+        p2 <- p2 + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
+      }
+    }
+    p2 <- p2 + labs(title=input$gene_input) +
+      scale_fill_manual(values=age_colors) +
+      theme_minimal()+
+      theme(
+        panel.border=element_rect(color="black", fill=NA, linewidth=0.75),
+        strip.text=element_text(face="bold")
+      ) 
+    p2
+  })
     
     #Both the HD and V2 heatmap outputs 
     output$HD_HM <- renderPlot({
