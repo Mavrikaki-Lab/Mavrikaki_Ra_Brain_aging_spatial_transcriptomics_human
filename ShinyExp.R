@@ -5,7 +5,6 @@
 #___________________________________LIBRARIES___________________________________
 
 library(tidyverse)
-library(readxl)
 library(ggplot2)
 library(tidyr)
 library(shiny)
@@ -13,90 +12,19 @@ library(shinyWidgets)
 library(bslib)
 library(plotly)
 library(bsicons)
-library(ggprism)
-library(grafify)
+# library(ggprism)
+# library(grafify)
 library(qs2)
 library(here)
 
 #___________________________________DATA PROCESSING SECTION_____________________
-
-#Uploading Files and storing in list for processing 
-V2 <- read_csv(here("pseudobulk_vst_by_domain_V2.csv"))
-HD <- read_csv(here("pseudobulk_counts_vst_general_code_age_layer.csv"))
-fileList <- list(HD, V2)
-
-# #Function that pivots the data from wide to long format for easier processing  
-# makeLongerFunc <- function(data){
-#   long_data <- data %>% 
-#     pivot_longer(
-#       cols=-gene_name,
-#       names_to="Sample",
-#       values_to="Expression"
-#     )
-#   return(long_data)
-# }
-# long_dataList <- lapply(fileList, makeLongerFunc)
-# qs2::qs_save(long_dataList, "data.qs2")
-
-long_dataList <- qs2::qs_read("data.qs2")
-
-#Extracting age and layer information from the long data of HD to be able to plot those characteristics in their specific groups 
-HD_age <- "(?<=_)young|old|middle(?=-)"
-HD_layer <- "(?<=-)$|L2|L1|L3|L4|L5|L6|WM"
-HD_proc <- long_dataList[[1]] %>% 
-  mutate(
-    age=str_extract(Sample, HD_age),
-    layer=str_extract(Sample, HD_layer)
-  ) %>% 
-  filter(!is.na(age)&!is.na(layer)) %>% 
-  mutate(Expression=as.numeric(Expression)) %>% 
-  mutate(
-    layer=case_when(
-      layer=="L3" ~ "L3_L4", 
-      layer=="L4" ~ "L3_L4", 
-      TRUE~layer
-    )
-  ) %>% 
-  mutate(
-    layer=factor(
-      layer,
-      levels=c("L1", "L2", "L3_L4", "L5", "L6", "WM")
-    ),
-    age=factor(age, levels=c("young", "middle", "old"))
-  ) 
-
-#Extracting age and layer information from the long data of V2 to be able to plot those characteristics in their specific groups 
+finDatalist <- qs2::qs_read("finDatalist.qs2")
+HD_proc <- qs2::qs_read("HD_proc.qs2")
+V2_proc <- qs2::qs_read("V2_proc.qs2")
 V2_age <- "(?<=_)young|middle|old(?=_)"
 V2_layer <- "Sp08D01|Sp08D02|Sp08D03|Sp08D04|Sp08D05|Sp08D06|Sp08D07|Sp08D08(?=_)"
-V2_proc <- long_dataList[[2]] %>% 
-  mutate(
-    age=str_extract(Sample, V2_age),
-    layer=str_extract(Sample, V2_layer),
-    layer=recode(layer, Sp08D01="L1", Sp08D02="L5", Sp08D03="WM1", Sp08D04="L2/L3", Sp08D05="L3", Sp08D06="WM2", Sp08D07="L6", Sp08D08="L3/L4")
-  ) %>% 
-  mutate(Expression=as.numeric(Expression)) %>% 
-  mutate(
-    layer=factor(
-      layer,
-      levels=c("L1", "L2/L3", "L3", "L3/L4", "L5", "L6", "WM1", "WM2")
-    ),
-    age=factor(age, levels=c("young", "middle", "old"))
-  ) 
-procList <- list(HD_proc, V2_proc)
-
-#Function that gets the median expression across age groups in each layer of both the HD and V2 datasets
-medianExpFunction <- function(data){
-  medianExp <- data %>% 
-    group_by(age, layer, gene_name) %>% 
-    summarize(
-      medExp=median(Expression, na.rm=TRUE),
-      .groups="drop"
-    )
-  plotData <- data %>% 
-    full_join(medianExp, by=c("gene_name", "layer", "age"))
-  return(plotData)
-}
-finDatalist <- lapply(procList, medianExpFunction)
+HD_age <- "(?<=_)young|old|middle(?=-)"
+HD_layer <- "(?<=-)$|L2|L1|L3|L4|L5|L6|WM"
 
 #________________________________SHINY SECTION_______________________________________
 
@@ -200,6 +128,7 @@ server <- function(input, output, session){
   #filtering the original datasets to contain the layer and age specific information on the gene that the user inputted 
   filteredData <- reactive({
     req(input$gene_input)
+
     selected_gene <- input$gene_input
     
     HD_geneData <- finDatalist[[1]] %>% 
@@ -268,7 +197,6 @@ server <- function(input, output, session){
     #Outputting the HD plot based on how the user wants to display their data 
 output$HD_plot <- renderPlot({
     HD_Data <- filteredData()$hd
-  
     if("ageGroups" %in% input$x_axis){
       p2 <- ggplot(HD_Data, aes(x=age, y=Expression, fill=age, text=paste("Age:", age))) +
         facet_grid(.~layer) +
