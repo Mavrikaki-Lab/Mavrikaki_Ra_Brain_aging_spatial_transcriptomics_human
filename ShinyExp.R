@@ -13,26 +13,31 @@ library(shinyWidgets)
 library(bslib)
 library(plotly)
 library(bsicons)
+library(ggprism)
+library(grafify)
 library(here)
 
 #___________________________________DATA PROCESSING SECTION_____________________
 
 #Uploading Files and storing in list for processing 
-V2 <- read_excel(here("pseudobulk_vst_by_domain_V2_Copy (3).xlsx"), sheet="Pool")
-HD <- read_excel(here("pseudobulk_counts_vst_general_code_age_layer - Copy.xlsx"), sheet="in")
+V2 <- read_csv(here("pseudobulk_vst_by_domain_V2.csv"))
+HD <- read_csv(here("pseudobulk_counts_vst_general_code_age_layer.csv"))
 fileList <- list(HD, V2)
 
-#Function that pivots the data from wide to long format for easier processing  
-makeLongerFunc <- function(data){
-  long_data <- data %>% 
-    pivot_longer(
-      cols=-gene_name,
-      names_to="Sample",
-      values_to="Expression"
-    )
-  return(long_data)
-}
-long_dataList <- lapply(fileList, makeLongerFunc)
+# #Function that pivots the data from wide to long format for easier processing  
+# makeLongerFunc <- function(data){
+#   long_data <- data %>% 
+#     pivot_longer(
+#       cols=-gene_name,
+#       names_to="Sample",
+#       values_to="Expression"
+#     )
+#   return(long_data)
+# }
+# long_dataList <- lapply(fileList, makeLongerFunc)
+# qs2::qs_save(long_dataList, "data.qs2")
+
+long_dataList <- qs2::qs_read("data.qs2")
 
 #Extracting age and layer information from the long data of HD to be able to plot those characteristics in their specific groups 
 HD_age <- "(?<=_)young|old|middle(?=-)"
@@ -217,7 +222,7 @@ server <- function(input, output, session){
           p <- p + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
         }
       }
-      p
+      p + theme_prism() + scale_fill_grafify()
     })
     
     #Outputting the HD plot based on how the user wants to display their data 
@@ -254,7 +259,7 @@ server <- function(input, output, session){
           p2 <- p2 + geom_jitter(stat="identity", position=position_jitterdodge(jitter.width=0.2), alpha=0.5)
         }
       }
-      p2
+      p2 + theme_prism() + scale_fill_grafify()
     })
     
     #Both the HD and V2 heatmap outputs 
@@ -262,13 +267,15 @@ server <- function(input, output, session){
       ggplot(data=heatMapFiltered()$hdHM, aes(x=layer, y=gene_name, fill=medExp))+
         geom_tile()+
         facet_wrap(~age) +
-        scale_fill_gradient(low="lightblue", high="darkred", name="Median Expression")
+        scale_fill_gradient(low="lightblue", high="darkred", name="Median Expression") +
+        theme_prism()
     })
     output$V2_HM <- renderPlot({
       ggplot(data=heatMapFiltered()$v2HM, aes(x=layer, y=gene_name, fill=medExp))+
         geom_tile()+
         facet_wrap(~age)+
-        scale_fill_gradient(low="lightblue", high="darkred", name="Median Expression")
+        scale_fill_gradient(low="lightblue", high="darkred", name="Median Expression") +
+        theme_prism()
     })
 }
 
