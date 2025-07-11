@@ -15,6 +15,7 @@ library(plotly)
 library(bsicons)
 library(ggprism)
 library(grafify)
+library(qs2)
 library(here)
 
 #___________________________________DATA PROCESSING SECTION_____________________
