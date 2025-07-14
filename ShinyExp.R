@@ -35,11 +35,11 @@ ui <- fluidPage(
   ), 
   card(
     card_header(
-      h5("Purpose", align="center")
+      h5("Overview", align="center")
     ),
     card_body(
-      p("This platform enables visualization of whole-genome expression data collected using spatial transcriptomics approach (Visium High-Definition (2 μm resolution) and
-Visium v2 (55 μm resolution) from human dorsolateral prefrontal cortex (DLPFC) tissue of a young (18-39 years), middle (40-69 years), and old (70-97 years) group,
+      p("This platform enables visualization of whole-genome expression data collected using spatial transcriptomics approach (Visium High-Definition (16 μm resolution) and
+Visium V2 (55 μm resolution)) from human dorsolateral prefrontal cortex (DLPFC) tissue of a young (18-39 years), middle (40-69 years), and old (70-97 years) group,
 allowing characterization of age-related molecular changes within and across cortical layers (and white matter), and cell types. ​
 From Rai et al., to be submitted", align="center")
     )
