@@ -231,7 +231,8 @@ output$HD_plot <- renderPlot({
       theme(
         panel.border=element_rect(color="black", fill=NA, linewidth=0.75),
         strip.text=element_text(face="bold")
-      ) 
+      ) +
+      scale_x_discrete(labels=c(L2="L2/L3"))
     p2
   })
     
@@ -239,16 +240,27 @@ output$HD_plot <- renderPlot({
     output$HD_HM <- renderPlot({
       ggplot(data=heatMapFiltered()$hdHM, aes(x=layer, y=gene_name, fill=medExp))+
         geom_tile()+
-        facet_wrap(~age) +
-        scale_fill_gradient(low="lightblue", high="darkred", name="Median Expression") +
-        theme_prism()
+        facet_grid(.~age, labeller=labeller(age=c(young="Young", middle="Middle", old="Old"))) +
+        scale_fill_gradientn(colors=c("blue", "white", "red"), name="Median Expression") +
+        theme_minimal()+
+        theme(
+          panel.border=element_rect(color="black", fill=NA, linewidth=0.75),
+          strip.text=element_text(face="bold")
+        ) +
+        xlab("Layers") + ylab("Gene Name")
+        
     })
     output$V2_HM <- renderPlot({
       ggplot(data=heatMapFiltered()$v2HM, aes(x=layer, y=gene_name, fill=medExp))+
         geom_tile()+
-        facet_wrap(~age)+
-        scale_fill_gradient(low="lightblue", high="darkred", name="Median Expression") +
-        theme_prism()
+        facet_grid(.~age, labeller=labeller(age=c(young="Young", middle="Middle", old="Old")))+
+        scale_fill_gradientn(colors=c("blue", "white", "red"), name="Median Expression")+
+        theme_minimal()+
+        theme(
+          panel.border=element_rect(color="black", fill=NA, linewidth=0.75),
+          strip.text=element_text(face="bold")
+        ) +
+        xlab("Layers") + ylab("Gene Name")
     })
 }
 
