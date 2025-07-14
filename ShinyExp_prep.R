@@ -25,21 +25,22 @@ HD_layer <- "(?<=-)$|L2|L1|L3|L4|L5|L6|WM"
 HD_proc <- long_dataList[[1]] %>%
   mutate(
     age=str_extract(Sample, HD_age),
-    layer=str_extract(Sample, HD_layer)
+    layer=str_extract(Sample, HD_layer), 
+    layer=recode(layer, L2="L2/L3")
   ) %>%
   filter(!is.na(age)&!is.na(layer)) %>%
   mutate(Expression=as.numeric(Expression)) %>%
   mutate(
     layer=case_when(
-      layer=="L3" ~ "L3_L4",
-      layer=="L4" ~ "L3_L4",
+      layer=="L3" ~ "L3/L4",
+      layer=="L4" ~ "L3/L4",
       TRUE~layer
     )
   ) %>%
   mutate(
     layer=factor(
       layer,
-      levels=c("L1", "L2", "L3_L4", "L5", "L6", "WM")
+      levels=c("L1", "L2/L3", "L3/L4", "L5", "L6", "WM")
     ),
     age=factor(age, levels=c("young", "middle", "old"))
   )
