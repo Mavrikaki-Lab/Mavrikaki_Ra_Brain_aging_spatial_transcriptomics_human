@@ -62,7 +62,9 @@ V2_proc <- long_dataList[[2]] %>%
       levels=c("L1", "L2/L3", "L3", "L3/L4", "L5", "L6", "WM1", "WM2")
     ),
     age=factor(age, levels=c("young", "middle", "old"))
-  ) 
+  ) %>% 
+  filter(!is.na(age)&!is.na(layer))
+
 procList <- list(HD_proc, V2_proc)
 qs2::qs_save(V2_proc, "V2_proc.qs2")
 
