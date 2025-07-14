@@ -231,8 +231,7 @@ output$HD_plot <- renderPlot({
       theme(
         panel.border=element_rect(color="black", fill=NA, linewidth=0.75),
         strip.text=element_text(face="bold")
-      ) +
-      scale_x_discrete(labels=c(L2="L2/L3"))
+      ) 
     p2
   })
     
