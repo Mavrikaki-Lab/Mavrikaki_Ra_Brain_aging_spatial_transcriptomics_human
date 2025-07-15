@@ -30,6 +30,11 @@ HD_layer <- "(?<=-)$|L2|L1|L3|L4|L5|L6|WM"
 
 #Setting the user interface of the app
 ui <- fluidPage(
+  tags$style("
+    body {
+    -moz-transform: scale(0.9, 0.9); zoom: 0.9; zoom: 100%;
+    }
+  "),
   titlePanel(
     h1("Aging-related Transcriptomic Changes with Spatial and Cell Type-Specific Resolution in the Human Brain", align="center")
   ), 
@@ -61,7 +66,7 @@ From Rai et al., to be submitted", align="center")
             accordion_panel(
               "HD plot", 
               accordion(
-                height=325,
+                height=300,
                 accordion_panel("HD cluster", div(imageOutput("HDcluster"), style="text-align:center;"))
               ),
               plotOutput("HD_plot")
@@ -78,10 +83,11 @@ From Rai et al., to be submitted", align="center")
         )
       ),
       card(
-        card_header(
-          h5("Acknowledgements", align="center")
-        ), 
-        card_image(file=here("Acknowledgements.png"))
+        card_image(file=here("Acknowledgements.png")),
+        card_body(
+          hr(),
+          p("Developed by Vedant Desai", align="center")
+        )
       )
     ),
     nav_panel(
@@ -97,10 +103,11 @@ From Rai et al., to be submitted", align="center")
         nav_panel("V2", plotOutput("V2_HM"))
       ),
       card(
-        card_header(
-          h5("Acknowledgements", align="center")
-        ),
-        card_image(file=here("Acknowledgements.png"))
+        card_image(file=here("Acknowledgements.png")),
+        card_body(
+          hr(),
+          p("Developed by Vedant Desai", align="center")
+        )
       )
     )
   )
@@ -114,7 +121,7 @@ server <- function(input, output, session){
   age_colors <- c(young = "#D22B2B", middle = "#0000FF", old = "#4F7942")
   
   output$HDcluster <- renderImage({
-    list(src=here("HDclusters.png"), width="90%", height="250")
+    list(src=here("HDclusters.png"), width="90%", height="225")
     },
     deleteFile=FALSE 
   )
