@@ -17,10 +17,13 @@ library(bsicons)
 library(qs2)
 library(here)
 
-#___________________________________DATA PROCESSING SECTION_____________________
+#___________________________________GLOBAL DATA LOADING SECTION_____________________
+# Load data files once globally to share across all sessions
 finDatalist <- qs2::qs_read("finDatalist.qs2")
 HD_proc <- qs2::qs_read("HD_proc.qs2")
 V2_proc <- qs2::qs_read("V2_proc.qs2")
+
+# Define regex patterns for age and layer extraction
 V2_age <- "(?<=_)young|middle|old(?=_)"
 V2_layer <- "Sp08D01|Sp08D02|Sp08D03|Sp08D04|Sp08D05|Sp08D06|Sp08D07|Sp08D08(?=_)"
 HD_age <- "(?<=_)young|old|middle(?=-)"
@@ -30,6 +33,7 @@ HD_layer <- "(?<=-)$|L2|L1|L3|L4|L5|L6|WM"
 
 #Setting the user interface of the app
 ui <- fluidPage(
+  title = "Brain Aging Spatial Transcriptomics",
   titlePanel(
     h1("Aging-related Transcriptomic Changes with Spatial and Cell Type-Specific Resolution in the Human Brain", align="center")
   ), 
