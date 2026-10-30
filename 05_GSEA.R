@@ -2,6 +2,7 @@
 # ------------------------------
 # This script performs GSEA (Gene Set Enrichment Analysis) using fgsea
 # for each spatial domain ("layer") from an Excel file with DEG results.
+# Gene sets: MSigDB human release 2024.1.Hs.
 # Results are saved per layer and visualized across pathway collections.
 
 # Load libraries
