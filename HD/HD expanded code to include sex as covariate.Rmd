@@ -1,0 +1,569 @@
+## Run DE analysis
+
+**Modified code from Catalyst to run using pseudobulk and metadata csv files***
+
+Differential gene expression analysis of count data was performed using the Bioconductor R package, DESeq2, which fits the count data to a negative binomial model. In cases where there are multiple groups and conditions across groups, it is recommended to use dummy variables in the model instead of interaction terms: <https://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#interactions>. **In this case, this means modeling a combined variable called `age_layer` instead of modeling both `age_group` and `cortical_layer` separately. **
+
+Before fitting the model, we often look at a metric called dispersion, which is a measure for variance which also takes into consideration mean expression. A dispersion value is estimated for each individual gene, then 'shrunken' to a more accurate value based on expected variation for a typical gene exhibiting that level of expression. Finally, the shrunken dispersion value is used in the final GLM fit.
+
+We use the below dispersion plot, which should show an inverse relationship between dispersion and mean expression, to get an idea of whether our data is a good fit for the model. **We see the expected inverse relationship, so our data is a good fit for the model.**
+
+
+# Load required libraries
+library(DESeq2)
+library(dplyr)
+library(tibble)
+library(tidyr)
+
+
+# Read the pseudobulk counts CSV
+counts <- read.csv("pseudobulk_counts_general_code_age_layer.csv", check.names = FALSE)
+
+
+# Load the file without assigning row names yet
+cluster_counts_raw <- read.csv("pseudobulk_counts_general_code_age_layer.csv", check.names = FALSE)
+
+# Check for duplicates in the first column (likely gene names)
+sum(duplicated(cluster_counts_raw[, 1]))  # number of duplicate gene names
+
+# Make unique gene names
+cluster_counts_raw[, 1] <- make.unique(as.character(cluster_counts_raw[, 1]))
+
+# Assign unique gene names as row names
+rownames(cluster_counts_raw) <- cluster_counts_raw[, 1]
+
+# Remove the first column since it's now the row names
+cluster_counts <- cluster_counts_raw[, -1]
+
+# Sanity check
+dim(cluster_counts)
+head(cluster_counts[, 1:5])
+
+# Read the metadata CSV
+metadata <- read.csv("pseudobulk_metadata_general_code_age_layer.csv", stringsAsFactors = FALSE)
+
+# Check the column names and structure
+str(metadata)
+
+# Extract the age_layer column (column D)
+age_layer <- metadata[[4]]  # or metadata$age_layer
+
+# Preview it
+age_layer <- metadata[[4]]; head(age_layer)
+
+
+formula <- as.formula(paste0("~ ", " + ", 'age_layer'))
+
+# Create sample metadata from vector
+metadata <- data.frame(age_layer = age_layer)
+
+# Set row names to match sample names in count matrix
+rownames(metadata) <- colnames(cluster_counts)
+
+# Check
+head(metadata)
+
+dds_to_use <- DESeqDataSetFromMatrix(
+  countData = cluster_counts,
+  colData = metadata,
+  design = ~ age_layer
+)
+
+
+
+# Rebuild DESeqDataSet
+dds <- DESeqDataSetFromMatrix(
+  countData = cluster_counts,
+  colData = metadata,
+  design = ~ age_layer  
+)
+
+
+# Run DESeq on your dds object
+de <- DESeq(dds)
+
+class(de)
+# Should return "DESeqDataSet"
+
+L1 old vs young
+
+contrast <- c("age_layer", "old_L1", "young_L1")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L1_vs_young_L1.csv", row.names = FALSE)
+
+
+
+L2 old vs young
+
+contrast <- c("age_layer", "old_L2", "young_L2")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L2_vs_young_L2.csv", row.names = FALSE)
+
+
+
+L3 old vs young
+
+contrast <- c("age_layer", "old_L3", "young_L3")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L3_vs_young_L3.csv", row.names = FALSE)
+
+
+L4 old vs young
+
+contrast <- c("age_layer", "old_L4", "young_L4")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L4_vs_young_L4.csv", row.names = FALSE)
+
+
+L5 old vs young
+
+contrast <- c("age_layer", "old_L5", "young_L5")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L5_vs_young_L5.csv", row.names = FALSE)
+
+
+L6 old vs young
+
+contrast <- c("age_layer", "old_L6", "young_L6")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L6_vs_young_L6.csv", row.names = FALSE)
+
+
+WM old vs young
+
+contrast <- c("age_layer", "old_WM", "young_WM")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+    # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_WM_vs_young_WM.csv", row.names = FALSE)
+
+
+
+Other old vs young
+
+contrast <- c("age_layer", "old_other", "young_other")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_other_vs_young_other.csv", row.names = FALSE)
+
+
+
+
+
+## Run DE analysis with sex as covariate***
+
+# Load required libraries
+library(DESeq2)
+library(dplyr)
+library(tibble)
+library(tidyr)
+
+
+# Read the pseudobulk counts CSV
+counts <- read.csv("pseudobulk_counts_general_code_age_layer.csv", check.names = FALSE)
+
+
+# Load the file without assigning row names yet
+cluster_counts_raw <- read.csv("pseudobulk_counts_general_code_age_layer.csv", check.names = FALSE)
+
+# Check for duplicates in the first column (likely gene names)
+sum(duplicated(cluster_counts_raw[, 1]))  # number of duplicate gene names
+
+# Make unique gene names
+cluster_counts_raw[, 1] <- make.unique(as.character(cluster_counts_raw[, 1]))
+
+# Assign unique gene names as row names
+rownames(cluster_counts_raw) <- cluster_counts_raw[, 1]
+
+# Remove the first column since it's now the row names
+cluster_counts <- cluster_counts_raw[, -1]
+
+# Sanity check
+dim(cluster_counts)
+head(cluster_counts[, 1:5])
+
+
+# Read the metadata CSV
+metadata <- read.csv("pseudobulk_metadata_general_code_age_layer _sex.csv", stringsAsFactors = FALSE)
+
+# Check the column names and structure
+str(metadata)
+
+# Extract the age_layer column (column D)
+age_layer <- metadata[[4]]  # or metadata$age_layer
+metadata$sex <- factor(metadata$sex)
+sex <- metadata[[5]] 
+
+
+# Preview it
+age_layer <- metadata[[4]]; head(age_layer)
+sex <- metadata[[5]]; head(sex) 
+
+
+dds <- DESeqDataSetFromMatrix(
+  countData = cluster_counts,
+  colData = metadata,
+  design = ~ sex + age_layer
+)
+
+# Run DESeq on your dds object
+de <- DESeq(dds)
+
+class(de)
+# Should return "DESeqDataSet"
+
+
+
+L1 old vs young with sex
+
+contrast <- c("age_layer", "old_L1", "young_L1")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L1_vs_young_L1_cov_sex.csv", row.names = FALSE)
+
+
+
+L2 old vs young with sex
+
+contrast <- c("age_layer", "old_L2", "young_L2")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L2_vs_young_L2_cov_sex.csv", row.names = FALSE)
+
+
+
+L3 old vs young with sex
+
+contrast <- c("age_layer", "old_L3", "young_L3")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L3_vs_young_L3_cov_sex.csv", row.names = FALSE)
+
+
+L4 old vs young with sex
+
+contrast <- c("age_layer", "old_L4", "young_L4")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L4_vs_young_L4_with_sex.csv", row.names = FALSE)
+
+
+L5 old vs young with sex
+
+contrast <- c("age_layer", "old_L5", "young_L5")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L5_vs_young_L5_cov_sex.csv", row.names = FALSE)
+
+
+L6 old vs young with sex
+
+contrast <- c("age_layer", "old_L6", "young_L6")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_L6_vs_young_L6_cov_sex.csv", row.names = FALSE)
+
+
+
+WM old vs young with sex
+
+contrast <- c("age_layer", "old_WM", "young_WM")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_WM_vs_young_WM_cov_sex.csv", row.names = FALSE)
+
+
+
+Other old vs young with sex
+
+contrast <- c("age_layer", "old_other", "young_other")
+
+# Raw log2 fold change results (no shrinkage)
+resLFC <- results(de, contrast = contrast)
+
+ 
+  
+  # resLFCS <- lfcShrink(de, coef=coef, type="apeglm")
+  resLFCS <- lfcShrink(de, contrast=contrast, type="ashr")
+  
+  # Inspect top genes
+head(resLFCS[order(resLFCS$padj), ])
+
+ 
+  res_df <- as.data.frame(resLFCS)
+res_df$gene_id <- rownames(res_df)
+# Reorder so gene_id is the first column (optional)
+res_df <- res_df[, c("gene_id", setdiff(names(res_df), "gene_id"))]
+
+  
+  # Write to file
+write.csv(res_df, file = "DESeq2_shrink_old_other_vs_young_other_cov_sex.csv", row.names = FALSE)
+
+
+

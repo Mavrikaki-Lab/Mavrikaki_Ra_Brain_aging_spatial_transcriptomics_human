@@ -1,0 +1,447 @@
+---
+title: "12.1 Astrocyte Subcluster"
+author: "Noor Sohail"
+date: "`r Sys.Date()`"
+format:
+  html:
+    theme: lumen
+    number-sections: false
+    default-image-extension: svg
+    lightbox: true
+    callout-icon: false
+    format-links: true
+    toc: true
+    echo: true
+    eval: true
+    message: false
+    warning: false
+    code-copy: true
+    code-overflow: wrap
+    code-fold: true
+    code-line-numbers: true
+    embed-resources: true
+    standalone: true
+    html-math-method: katex
+    grid:
+      sidebar-width: 250px
+      body-width: 900px
+      margin-width: 300px
+    comments:
+      hypothesis: true
+    df-print: paged
+    code-block-bg: true
+knitr:
+  opts_chunk:
+    fig-align: center
+execute:
+  freeze: auto
+  keep-md: false
+---
+
+::: callout-important
+# Project background
+**Astrocyte subtypes:**
+
+  - I can subset to the Astro-FB and Astro-PP populations
+  - Re-cluster this population to identify different subtypes of astrocytes
+  - For the fastest and best results, if you have lists of subtypes and marker genes, I can then map - subtypes to clusters. 
+  - I will also generate top genes for each cluster.
+  
+**For each astrocyte subtypes, we can then quantify the number of cells in ages/layers to answer:**
+
+  - Are certain subtypes layer-enriched?
+  - Do certain subtypes age differently?
+
+:::
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(qs)
+library(harmony)
+library(DT)
+
+# Define color scales for up to 24 clusters/samples
+colors <- as.vector(grafify:::graf_palettes[["kelly"]])
+
+options(scipen = 999)  # turn off scientific notation globally
+```
+
+# Load Seurat object
+
+Here we:
+
+1. Update `age_group` labels to be "young", "middle", "old"
+2. Remove sample `AGHD16`
+3. Subset to `Astro-FB` and `Astro-PP`
+
+```{r}
+#| eval: false
+# Load seurat object with updated cortical layers
+seurat_obj <- "../results/08_cortical_layers_v2.qs"
+seurat <- qread(seurat_obj)
+DefaultAssay(seurat) <- "Spatial.016um"
+
+# Save space and make subsetting go faster
+seurat[["sketch"]] <- NULL
+seurat[["Spatial.016um"]]$data <- NULL
+
+# Update metadata
+seurat@meta.data <- seurat@meta.data %>%
+  mutate(age_group = case_when(
+    age_group == 'Young Adult' ~ 'young',
+    age_group == 'Middle Aged' ~ 'middle', 
+    age_group == 'Old' ~ 'old'
+  )) %>%
+  mutate(age_layer_celltype = paste(age_group, 
+                                    cortical_layer_v2, 
+                                    full_first_type_sub, 
+                                    sep = '-'))
+
+# Remove cells not of interest
+seurat <- subset(seurat, general_code != 'AGHD16')
+seurat <- subset(seurat, full_first_type_sub %in% c("Astro-PP", "Astro-FB"))
+
+qsave(seurat, "results/12.1_astrocytes_raw.qs")
+```
+
+```{r}
+# seurat <- qread("results/12.1_astrocytes_raw.qs")
+seurat <- qread("results/12.1_astro_subcluster.qs")
+
+order <- seurat$astro_cluster_projected %>%
+  unique() %>% as.numeric() %>% sort() %>%
+  as.character()
+seurat$astro_cluster_projected <- factor(seurat$astro_cluster_projected,
+                                         levels = order)
+
+dge <- read.csv("results/12.1_FindAllMarkers_res0.5_astro.csv",
+                row.names = 1)
+```
+
+::: callout-important
+# Total number of cells and genes
+- Number of cells = `r ncol(seurat[["Spatial.016um"]])`
+- Number of genes = `r nrow(seurat[["Spatial.016um"]])`
+:::
+
+# Number of cells
+
+::: {.panel-tabset}
+
+## General code
+
+```{r}
+#| fig-width: 8
+seurat@meta.data %>% 
+  ggplot(aes(x=general_code, fill=age_group)) + 
+  geom_bar(color = "black") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))
+```
+
+## Age group
+
+```{r}
+seurat@meta.data %>% 
+  ggplot(aes(x=age_group, fill=age_group)) + 
+  geom_bar(color = "black") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))
+```
+
+## Cortical layer
+
+```{r}
+seurat@meta.data %>% 
+  ggplot(aes(x=cortical_layer_v2, fill=cortical_layer_v2)) + 
+  geom_bar(color = "black") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))
+```
+
+## Celltype
+
+```{r}
+seurat@meta.data %>% 
+  ggplot(aes(x=full_first_type_sub, fill=full_first_type_sub)) + 
+  geom_bar(color = "black") +
+  theme_bw() + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1))
+```
+
+:::
+
+
+# scRNA workflow
+
+Steps taken:
+
+1. Log-normalize data
+2. 2,000 highly variable genes selected
+3. Sketch downsampling to 100k cells
+4. Calculate 2,000 HVGs on sketched cells
+6. Sketch scale/center data to RunPCA
+7. Sketch RunUMAP on 50 PCs
+8. Sketch FindNeighbors (k-nearest neighbors) on 50 PCs
+9. Sketch Leiden clustering `resolution = 0.5`
+10. Project clusters to entire dataset
+
+```{r}
+#| eval: false
+# Set parallelization (multithreading) to speed up calculations
+library(future)
+plan(multisession, workers = future::availableCores())
+
+# Increases the size of the default vector (8GB)
+options(future.globals.maxSize = 50000 * 1024^2)
+
+
+# Normalize, HVG
+seurat <- NormalizeData(seurat)
+seurat <- FindVariableFeatures(seurat)
+
+# Sketch downsample
+# Select 100,000 cells based on leverage scores
+# Create a new 'sketch' assay
+seurat <- SketchData(object = seurat,
+                            assay = 'Spatial.016um',
+                            ncells = 100000,
+                            method = "LeverageScore",
+                            sketched.assay = "sketch")
+
+# Sketch HVG
+# Identify the most variable genes
+seurat <- FindVariableFeatures(seurat, 
+                               selection.method = "vst",
+                               nfeatures = 2000,
+                               assay = "sketch")
+
+# Sketch scale data and PCA
+seurat <- ScaleData(seurat, assay = "sketch")
+seurat <- RunPCA(seurat, 
+                 assay = "sketch",
+                 reduction.name = "pca.sketch_astro")
+
+# UMAP
+seurat <- RunUMAP(seurat, 
+                  reduction = "pca.sketch_astro", 
+                  reduction.name = "umap.sketch_astro", 
+                  return.model = TRUE, 
+                  dims = 1:50,
+                  seed.use = 12345)
+
+# kNN and clustering
+# Determine the K-nearest neighbor graph
+seurat <- FindNeighbors(seurat, 
+                        assay = "sketch", 
+                        reduction = "pca.sketch_astro",
+                        dims = 1:50)
+seurat <- FindClusters(seurat, 
+                       cluster.name = "astro_cluster_sketch", 
+                       algorithm = 4,
+                       resolution = 0.5,
+                       random.seed = 12345)
+
+
+# Project from sketch assay onto entire dataset
+seurat <- ProjectData(
+  object = seurat,
+  sketched.assay = "sketch",
+  sketched.reduction = "pca.sketch_astro",
+  umap.model = "umap.sketch_astro",
+  dims = 1:50,
+  assay = "Spatial.016um",
+  full.reduction = "full.pca.sketch_astro",
+  refdata = list(astro_cluster_projected = "astro_cluster_sketch")
+  )
+
+# Save
+qsave(seurat, "results/12.1_astro_subcluster.qs")
+
+
+# FindAllMarkers
+Idents(seurat) <- "astro_cluster_projected"
+dge <- FindAllMarkers(seurat, assay = "Spatial.016um")
+write.csv(dge, "results/12.1_FindAllMarkers_res0.5_astro.csv")
+```
+
+## PCA
+
+Principal Components Analysis is a dimensionality-reduction method employed to stratify data by their variance. In other words, points that are more closely together on a PCA are more similar to each other, while points that are more dissimilar to each other will be further apart.
+
+Here we are plotting the first two principal components against each other. Ideally we are assessing the calculation such that we do not see any batch variable causing stratification of cells.
+
+::: {.panel-tabset}
+
+### General code
+
+```{r}
+DimPlot(seurat, 
+        group.by = "general_code",
+        reduction = "pca.sketch_astro")
+```
+
+### Age group
+
+```{r}
+DimPlot(seurat, 
+        group.by = "age_group",
+        reduction = "pca.sketch_astro")
+```
+
+### Cortical layer
+
+```{r}
+DimPlot(seurat, 
+        group.by = "cortical_layer_v2",
+        reduction = "pca.sketch_astro")
+```
+
+### Celltype
+
+```{r}
+DimPlot(seurat, 
+        group.by = "full_first_type_sub",
+        reduction = "pca.sketch_astro")
+```
+
+:::
+
+We can additionally see which genes have the highest weights (positive and negative) for each principal component. Again, we would ideally hope to see celltype markers at this point.
+
+```{r}
+print(seurat[["pca.sketch_astro"]], 
+      dims = 1:5, nfeatures = 5)
+```
+
+
+## UMAP
+
+UMAP will take the information from any number of top PCs to arrange the cells in this multidimensional space. It will take those distances in multidimensional space and plot them in two dimensions working to preserve local and global structure. In this way, the distances between cells represent similarity in expression.
+
+
+::: {.panel-tabset}
+
+### General code
+
+```{r}
+DimPlot(seurat, 
+        group.by = "general_code",
+        reduction = "umap.sketch_astro")
+```
+
+### Age group
+
+```{r}
+DimPlot(seurat, 
+        group.by = "age_group",
+        reduction = "umap.sketch_astro")
+```
+
+### Cortical layer
+
+```{r}
+DimPlot(seurat, 
+        group.by = "cortical_layer_v2",
+        reduction = "umap.sketch_astro")
+```
+
+### Celltype
+
+```{r}
+DimPlot(seurat, 
+        group.by = "full_first_type_sub",
+        reduction = "umap.sketch_astro")
+```
+
+:::
+
+## Clustering
+
+Here we iteratively group cells together with graph-based clustering. The resolution is an important argument that sets the “granularity” of the clusters. Smaller resolution values lead to a fewer clusters that contain more cells. 
+
+```{r}
+Idents(seurat) <- "astro_cluster_projected"
+DimPlot(seurat, 
+        group.by = "astro_cluster_projected",
+        reduction = "full.umap.sketch_astro")
+```
+
+
+
+# FindAllMarkers Annotation
+
+
+Here are the top genes for each cluster represented as a dotplot to summarize the top DGEs for a quick overview.
+
+
+```{r}
+#| fig-width: 30
+#| fig-height: 8
+Idents(seurat) <- "astro_cluster_projected"
+
+dge_markers <- dge %>%
+  subset(p_val_adj < 0.05) %>%
+  subset(avg_log2FC > 0) %>%
+  arrange(cluster) %>% 
+  # Dotplot won't let you have genes show up multiple times
+  # Only keep the first instance
+  filter(!duplicated(gene)) %>%
+  group_by(cluster) %>%
+  slice_head(n = 8) %>%
+  summarise(genes = list(gene), .groups = "drop") %>%
+  deframe()
+
+DotPlot(seurat, dge_markers, 
+        assay = "Spatial.016um") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+# Astrocyte Markers
+
+There are the genes that come for Supplementary Table 6 of [Green et al. (2024)](https://www.nature.com/articles/s41586-024-07871-6) with the list of top genes per subtype.
+
+Here, we grab the top 10 markers by `avg_log2FC` for the different Astroctye subtypes:
+
+```{r}
+library(readxl)
+astro_markers <- read_excel("green_2024_supp_table_6.xlsx", 
+                         sheet = "DEGs") %>%
+  subset(cell.type == "astrocytes") 
+
+astro_markers <- astro_markers %>%
+  arrange(avg_log2FC) %>%
+  # Dotplot won't let you have genes show up multiple times
+  # Only keep the first instance
+  filter(!duplicated(gene)) %>%
+  group_by(state) %>%
+  slice_head(n = 8) %>%
+  summarise(genes = list(gene), .groups = "drop") %>%
+  deframe()
+
+  
+astro_markers %>% as.data.frame()
+```
+
+
+```{r}
+#| fig-width: 30
+#| fig-height: 8
+Idents(seurat) <- "astro_cluster_projected"
+DotPlot(seurat, astro_markers, 
+        assay = "Spatial.016um") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+# R session
+
+
+::: {.callout-note collapse=true}
+# Session Info
+
+```{r}
+sessionInfo()
+```
+:::

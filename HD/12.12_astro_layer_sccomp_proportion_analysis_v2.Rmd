@@ -1,0 +1,288 @@
+---
+title: "12.12 Layer Astro Subtype Proportion Analysis"
+author: "Harvard Chan Bioinformatics Core"
+date: "`r Sys.Date()`"
+output:
+   html_document:
+      code_folding: hide
+      df_print: paged
+      highlights: pygments
+      self_contained: true
+      theme: default
+      toc: true
+      toc_float:
+         collapsed: true
+         smooth_scroll: true
+params:
+   project_file: ../../information.R
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, cache=FALSE, message=FALSE, warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load libraries'
+library(Seurat)
+library(knitr)
+library(rmarkdown)
+library(data.table)
+library(DT)
+library(patchwork)
+library(ggprism)
+library(grafify)
+library(R.utils)
+library(tidyverse)
+library(bcbioR)
+library(htmltools)
+library(qs)
+library(sccomp)
+
+
+ggplot2::theme_set(theme_prism(base_size = 12))
+
+# Set seed for reproducibility
+set.seed(1454944673L)
+opts_chunk[["set"]](
+    cache = F,
+    cache.lazy = FALSE,
+    dev = c("png", "pdf"),
+    error = TRUE,
+    highlight = TRUE,
+    message = FALSE,
+    prompt = FALSE,
+    tidy = FALSE,
+    warning = FALSE,
+    echo = T, 
+    fig.height = 4)
+
+source("../../information.R")
+```
+
+
+```{r sanitize-datatable}
+# Create a function to clean up data frames
+sanitize_datatable <- function(df, ...) {
+  # Remove dashes from row names and column names which cause wrapping
+  DT::datatable(df, ...,
+    rownames = gsub("-", "_", rownames(df)),
+    colnames = gsub("-", "_", colnames(df))
+  )
+}
+```
+
+# Overview
+
+-   Project: `r project`
+-   PI: `r PI`
+-   Analyst: Noor Sohail
+-   Experiment: `r experiment`
+-   Aim: `r aim`
+
+```{r load data, eval=FALSE}
+seurat <- qread("results/12.3_astro_cluster_res0.15.qs")
+seurat <- subset(seurat,
+                 astro_cluster_projected != "13")
+
+# Create new column
+seurat$astro_clusters_grouped <- seurat$astro_cluster_projected
+seurat$astro_clusters_grouped[seurat$astro_clusters_grouped %in% c(5, 7)] <- "5_7"
+
+# Order
+order <- seurat$astro_cluster_projected %>%
+  unique() %>% as.numeric() %>% sort() %>%
+  as.character()
+
+idx5 <- match("5", order)
+order_grouped <- append(order[!order %in% c("5", "7")], "5_7", after = idx5 - 1)
+
+# Factorize
+seurat$astro_clusters_grouped <- factor(seurat$astro_clusters_grouped,
+                                        levels = order_grouped)
+
+name_astro <- paste0("astro_", 1:length(order_grouped))
+map_vec <- setNames(name_astro, order_grouped)
+
+# Apply to your Seurat object column
+seurat$name_astro_clusters <- map_vec[as.character(seurat$astro_clusters_grouped)] %>% unname()
+seurat$name_astro_clusters <- factor(seurat$name_astro_clusters,
+                                     levels = name_astro)
+```
+
+# Cell Type Counts
+
+We again exclude AGHD16 from analysis as its clustering is not consistent with the other samples.
+
+```{r subset-data, eval=FALSE}
+seurat_laminar <- subset(seurat, general_code != 'AGHD16')
+seurat_laminar@meta.data <- seurat_laminar@meta.data %>%
+  mutate(age_group = factor(age_group,
+                            levels = c("young", "middle", "old")))
+seurat_laminar_meta <- seurat_laminar@meta.data
+```
+
+Most of the cell types have >50 cells per sample, meaning that attempting analysis of cell type proportion at this level of granularity is reasonable. We note that, for cell types with <50 cells, statistical results may be less reliable.
+
+```{r examine-n-cells, fig.width = 12, fig.height = 8}
+# n_cells <- seurat_laminar_meta %>%
+#   group_by(general_code,
+#            age_group,
+#            cortical_layer_v2,
+#            name_astro_clusters) %>%
+#   summarize(n_cells_type = n())
+# 
+# write_csv(n_cells, 'results/12.12_n_cells_per_type_per_indiv.csv')
+n_cells <- read.csv('results/12.12_n_cells_per_type_per_indiv.csv')
+
+ggplot(n_cells, aes(x = name_astro_clusters,
+                    y = n_cells_type,
+                    fill = age_group)) +
+  geom_boxplot() +
+  facet_wrap(~cortical_layer_v2) +
+  scale_x_discrete(guide = guide_axis(angle = 45)) +
+  scale_fill_cb_friendly() + scale_y_log10() +
+  geom_hline(aes(yintercept = 50), linetype = 2)
+```
+
+# sccomp {.tabset}
+
+To test for differential cell composition we use [sccomp](https://github.com/MangiolaLaboratory/sccomp) a method for differential composition and variability analyses that jointly models data count distribution, compositionality, group-specific variability, and proportion mean–variability association, being aware of outliers.
+
+Our model includes age group (old vs young or middle vs young). Results are computed per cortical layer.
+
+```{r compute-sccomp, eval = !file.exists('results/12.12_sccomp_results_by_layer.qs')}
+cortical_layers <- seurat_laminar$cortical_layer_v2 %>%
+  unique() %>%
+  na.omit() %>%
+  sort()
+
+sccomp_results_list     <- list()
+sccomp_results_sex_list <- list()
+
+for (layer in cortical_layers) {
+  seurat_sub <- subset(seurat_laminar, cortical_layer_v2 == layer)
+
+  set.seed(1454944673L)
+  sccomp_results_list[[layer]] <- seurat_sub |>
+    sccomp_estimate(
+      formula_composition = ~age_group,
+      .sample  = sample,
+      .cell_group = name_astro_clusters,
+      bimodal_mean_variability_association = TRUE,
+      cores = 1,
+      variational_inference = FALSE,
+      verbose = FALSE
+    ) |>
+    sccomp_remove_outliers(cores = 1, verbose = FALSE) |>
+    sccomp_test() %>%
+    mutate(cortical_layer_v2 = layer)
+}
+
+qsave(sccomp_results_list, 'results/12.12_sccomp_results_by_layer.qs')
+```
+
+```{r}
+  # ── posterior predictive check plots ─────────────────────────────────────
+  cat(paste0(
+    "A plot of group proportions, faceted by groups. ",
+    "The blue boxplots represent the posterior predictive check. ",
+    "If the model is descriptively adequate for the data, the blue boxplots ",
+    "should roughly overlay the black boxplots, which represent the observed data. ",
+    "The color coding represents the significant associations.\n\n"
+  ))
+  cat("**We see that the blue boxplots vary from the black boxplots quite a bit, ",
+      "which is an indication that this model may not be a great fit for this data.**\n\n")
+```
+
+```{r process-results}
+sccomp_results_list <- qread('results/12.12_sccomp_results_by_layer.qs')
+
+# Helper: compute proportional fold changes and join with FDR results
+compute_result_combined <- function(sccomp_result) {
+  fc <- lapply(c('old', 'middle'), function(x) {
+    sccomp_result |>
+      sccomp_proportional_fold_change(
+        formula_composition = ~age_group,
+        from = "young",
+        to   = x
+      ) %>%
+      mutate(parameter = paste0('age_group', x),
+             to = x,
+             from = "young")
+  }) %>% bind_rows()
+
+  sccomp_result %>%
+    filter(factor == 'age_group') %>%
+    dplyr::select(name_astro_clusters, parameter, c_FDR,
+                  cortical_layer_v2) %>%
+    left_join(fc, by = c("name_astro_clusters", "parameter")) %>%
+    arrange(c_FDR)
+}
+
+all_results_combined <- lapply(sccomp_results_list, compute_result_combined)
+```
+
+```{r display-sccomp, results='asis', fig.height=8, fig.width=12}
+for (layer in names(sccomp_results_list)) {
+
+  cat(paste0("\n\n## ", layer, "\n\n"))
+
+  # ── full results table ────────────────────────────────────────────────────
+  result_combined <- all_results_combined[[layer]]
+  print(htmltools::tagList(sanitize_datatable(result_combined)))
+  cat("\n\n")
+
+  # ── significant results ───────────────────────────────────────────────────
+  cat("Significant results:\n\n")
+  print(htmltools::tagList(
+    sanitize_datatable(
+      result_combined %>%
+        subset(c_FDR < 0.05) %>%
+        dplyr::select(name_astro_clusters, cortical_layer_v2,
+                      to, from, 
+                      proportion_fold_change, c_FDR)
+    )
+  ))
+  cat("\n\n")
+
+  # print(
+  #   sccomp_results_list[[layer]] |> sccomp_boxplot(factor = "age_group")
+  # )
+  # cat("\n\n")
+
+  print(
+    sccomp_results_list[[layer]] |>
+      sccomp_boxplot(factor = "age_group", remove_unwanted_effects = TRUE) +
+      facet_wrap(~name_astro_clusters, nrow = 2, scales = 'free_y') +
+      theme_classic(base_size = 12) +
+      ggtitle(paste("Layer", layer))
+  )
+  cat("\n\n")
+}
+```
+
+# Conclusions {.tabset}
+
+Based upon sccomp, comparing `young` to `old`, the following populations show a significant change in proportion per cortical layer. A positive fold change indicates more cells in `old` compared to `young`.
+
+```{r conclusions, results='asis'}
+for (layer in names(all_results_combined)) {
+  cat(paste0("\n\n## ", layer, "\n\n"))
+
+  sig <- all_results_combined[[layer]] %>%
+    subset(c_FDR < 0.05) %>%
+    dplyr::select(name_astro_clusters, cortical_layer_v2,
+                  from, to,
+                  proportion_fold_change, statement, c_FDR)
+
+  print(kable(sig))
+  cat("\n\n")
+}
+```
+
+# R session
+
+List and version of tools used for the QC report generation.
+
+```{r}
+sessionInfo()
+```
